@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MATRIX NEON — 3D Shooter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="stat">
+            <span class="label">WAVE</span>
+            <span id="wave">1</span>
+          </div>
+          <div class="stat">
+            <span class="label">SCORE</span>
+            <span id="score">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">KILLS</span>
+            <span id="kills">0</span>
+          </div>
+        </div>
+        <div class="hud-bottom">
+          <div class="bar-wrap">
+            <span class="label">INTEGRITY</span>
+            <div class="bar"><div id="health-bar"></div></div>
+            <span id="health-text">100</span>
+          </div>
+          <div class="crosshair" id="crosshair">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="bar-wrap ammo">
+            <span class="label">AMMO</span>
+            <span id="ammo">30 / ∞</span>
+          </div>
+        </div>
+        <div id="boss-bar" class="hidden">
+          <span id="boss-name">BOSS</span>
+          <div class="bar"><div id="boss-health"></div></div>
+        </div>
+        <div id="wave-banner" class="hidden"></div>
+        <div id="hit-marker" class="hidden">+</div>
+        <div id="damage-vignette"></div>
+      </div>
+
+      <div id="menu">
+        <div class="menu-rain" aria-hidden="true"></div>
+        <div class="menu-panel">
+          <p class="eyebrow">SYSTEM BREACH // SECTOR 7</p>
+          <h1>MATRIX<br /><span>NEON</span></h1>
+          <p class="tagline">Jack in. Clear the agents. Survive the architects.</p>
+          <button id="start-btn" type="button">ENTER THE MATRIX</button>
+          <p class="controls">
+            WASD move · Mouse aim · Click shoot · R reload · Shift dash · Esc pause
+          </p>
+        </div>
+      </div>
+
+      <div id="pause" class="hidden">
+        <div class="menu-panel compact">
+          <h2>PAUSED</h2>
+          <button id="resume-btn" type="button">RESUME</button>
+          <button id="admin-open-btn" type="button" class="ghost">ADMIN ACCESS</button>
+        </div>
+      </div>
+
+      <div id="gameover" class="hidden">
+        <div class="menu-panel compact">
+          <h2>CONNECTION LOST</h2>
+          <p id="final-stats"></p>
+          <button id="restart-btn" type="button">RECONNECT</button>
+        </div>
+      </div>
+
+      <div id="admin-modal" class="hidden">
+        <div class="menu-panel admin-panel">
+          <h2>ADMIN // ROOT</h2>
+          <div id="admin-login">
+            <p>Enter admin key</p>
+            <input id="admin-key" type="password" autocomplete="off" placeholder="••••••••" />
+            <button id="admin-unlock-btn" type="button">UNLOCK</button>
+            <p id="admin-error" class="error hidden">Access denied</p>
+          </div>
+          <div id="admin-controls" class="hidden">
+            <div class="admin-grid">
+              <button data-admin="god" type="button">Toggle God Mode</button>
+              <button data-admin="ammo" type="button">Infinite Ammo</button>
+              <button data-admin="heal" type="button">Full Heal</button>
+              <button data-admin="oneshot" type="button">One-Shot Mode</button>
+              <button data-admin="boss" type="button">Spawn Boss</button>
+              <button data-admin="skip" type="button">Skip Wave</button>
+              <button data-admin="slowmo" type="button">Slow Motion</button>
+              <button data-admin="nuke" type="button">Nuke Arena</button>
+              <button data-admin="score" type="button">+5000 Score</button>
+              <button data-admin="hard" type="button">Force Hard Mode</button>
+            </div>
+            <p id="admin-status">Ready</p>
+            <button id="admin-close-btn" type="button" class="ghost">CLOSE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
