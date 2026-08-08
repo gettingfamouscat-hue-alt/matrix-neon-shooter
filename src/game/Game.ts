@@ -1,4 +1,7 @@
 import * as THREE from 'three'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { AudioBus } from './audio'
 import { Effects } from './effects'
 import { MatrixRain } from './matrixRain'
@@ -6,6 +9,7 @@ import {
   createArena,
   createBoss,
   createPickup,
+  createWeapon,
   randomEdgeSpawn,
   spawnEnemy,
 } from './entities'
@@ -31,12 +35,16 @@ const ADMIN_STORAGE = 'matrix-neon-admin'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
+  private composer: EffectComposer
   private scene = new THREE.Scene()
-  private camera = new THREE.PerspectiveCamera(75, 1, 0.1, 200)
+  private camera = new THREE.PerspectiveCamera(70, 1, 0.08, 220)
   private clock = new THREE.Clock()
   private rain: MatrixRain
   private effects: Effects
   private audio = new AudioBus()
+  private weapon: THREE.Group
+  private weaponKick = 0
+  private bobPhase = 0
 
   private keys = new Set<string>()
   private yaw = 0
@@ -106,17 +114,36 @@ export class Game {
   }
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+    })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.15
     this.scene.background = new THREE.Color(0x020805)
-    this.scene.fog = new THREE.FogExp2(0x020805, 0.028)
+    this.scene.fog = new THREE.FogExp2(0x04140a, 0.018)
 
-    createArena(this.scene)
-    this.rain = new MatrixRain(this.scene)
+    createArena(this.scene, this.renderer)
+    this.rain = new MatrixRain(this.scene, 900)
     this.effects = new Effects(this.scene)
+    this.weapon = createWeapon()
+    this.camera.add(this.weapon)
+    this.scene.add(this.camera)
     this.camera.position.copy(this.playerPos)
+
+    this.composer = new EffectComposer(this.renderer)
+    this.composer.addPass(new RenderPass(this.scene, this.camera))
+    const bloom = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.55,
+      0.7,
+      0.35,
+    )
+    this.composer.addPass(bloom)
 
     this.bindUi()
     this.bindInput()
@@ -196,6 +223,7 @@ export class Game {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
+    this.composer.setSize(w, h)
   }
 
   start() {
@@ -295,12 +323,13 @@ export class Game {
     if (!this.admin.infiniteAmmo) this.ammo--
     this.fireCooldown = this.rapidTimer > 0 ? 0.07 : 0.14
     this.audio.shoot()
+    this.weaponKick = 1
     this.el.crosshair.classList.add('firing')
     window.setTimeout(() => this.el.crosshair.classList.remove('firing'), 80)
 
     const origin = this.camera.getWorldPosition(this.tmp.set(0, 0, 0))
     const dir = this.camera.getWorldDirection(this.tmp2)
-    this.effects.muzzleFlash(origin.clone().addScaledVector(dir, 1.2))
+    this.effects.muzzleFlash(origin.clone().addScaledVector(dir, 1.35))
 
     this.raycaster.set(origin, dir)
     const targets = this.enemies.filter((e) => e.alive).map((e) => e.mesh)
@@ -385,7 +414,7 @@ export class Game {
     if (isBoss) {
       const boss = createBoss(this.wave, this.admin.hardMode)
       randomEdgeSpawn(this.spawnScratch)
-      boss.mesh.position.set(this.spawnScratch.x, 2.2, this.spawnScratch.z)
+      boss.mesh.position.set(this.spawnScratch.x, 2, this.spawnScratch.z)
       this.scene.add(boss.mesh)
       this.enemies.push(boss)
       this.audio.boss()
@@ -415,7 +444,7 @@ export class Game {
     randomEdgeSpawn(this.spawnScratch)
     e.mesh.position.set(
       this.spawnScratch.x,
-      kind === 'drone' ? 3 + Math.random() * 2 : 1.1,
+      kind === 'drone' ? 3 + Math.random() * 2 : kind === 'boss' ? 2 : 0,
       this.spawnScratch.z,
     )
     this.scene.add(e.mesh)
@@ -485,7 +514,7 @@ export class Game {
           break
         }
         const boss = createBoss(Math.max(5, this.wave), this.admin.hardMode)
-        boss.mesh.position.set(0, 2.2, -20)
+        boss.mesh.position.set(0, 2, -20)
         this.scene.add(boss.mesh)
         this.enemies.push(boss)
         this.audio.boss()
@@ -552,8 +581,27 @@ export class Game {
     this.camera.rotation.order = 'YXZ'
     this.camera.rotation.y = this.yaw
     this.camera.rotation.x = this.pitch
+
+    this.weaponKick = Math.max(0, this.weaponKick - rawDt * 8)
+    const moving =
+      this.running &&
+      !this.paused &&
+      (this.keys.has('KeyW') ||
+        this.keys.has('KeyA') ||
+        this.keys.has('KeyS') ||
+        this.keys.has('KeyD'))
+    if (moving) this.bobPhase += rawDt * 10
+    const bobY = moving ? Math.sin(this.bobPhase) * 0.015 : 0
+    const bobX = moving ? Math.cos(this.bobPhase * 0.5) * 0.01 : 0
+    this.weapon.position.set(
+      0.28 + bobX,
+      -0.28 + bobY - this.weaponKick * 0.04,
+      -0.45 - this.weaponKick * 0.08,
+    )
+    this.weapon.rotation.x = 0.04 + this.weaponKick * 0.12
+
     this.effects.update(rawDt, this.camera)
-    this.renderer.render(this.scene, this.camera)
+    this.composer.render()
   }
 
   private updatePlayer(dt: number) {
