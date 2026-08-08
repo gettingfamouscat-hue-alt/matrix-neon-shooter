@@ -446,8 +446,8 @@ export class Game {
   }
 
   tryAdminUnlock() {
-    const expected = import.meta.env.VITE_ADMIN_PASSWORD || 'wake-up-neo'
-    if (this.el.adminKey.value === expected) {
+    const expected = import.meta.env.VITE_ADMIN_PASSWORD
+    if (expected && this.el.adminKey.value === expected) {
       sessionStorage.setItem(ADMIN_STORAGE, '1')
       this.el.adminLogin.classList.add('hidden')
       this.el.adminControls.classList.remove('hidden')
