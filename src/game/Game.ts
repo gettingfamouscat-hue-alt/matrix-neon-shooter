@@ -453,6 +453,7 @@ export class Game {
     this.weaponIndex = index
     this.applyWeaponModel()
     this.fireCooldown = 0.15
+    this.audio.switchWeapon()
     this.updateHud()
   }
 
@@ -505,7 +506,7 @@ export class Game {
     if (!this.admin.infiniteAmmo) this.ammoPools[this.weaponIndex]--
     const rate = this.rapidTimer > 0 ? w.fireRate * 0.65 : w.fireRate
     this.fireCooldown = rate
-    this.audio.shoot()
+    this.audio.shoot(w.id)
     this.weaponKick = w.kick
     this.el.crosshair.classList.add('firing')
     window.setTimeout(() => this.el.crosshair.classList.remove('firing'), 80)

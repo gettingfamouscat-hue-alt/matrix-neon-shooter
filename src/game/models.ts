@@ -112,14 +112,33 @@ export function createEnemyModel(kind: EnemyKind): THREE.Group {
     const shoulderR = shoulderL.clone()
     shoulderR.position.x = 0.42
 
-    const armL = capsule(0.09, 0.55, suit, 8)
-    armL.position.set(-0.48, 1.35, 0)
-    const armR = capsule(0.09, 0.55, suit, 8)
-    armR.position.set(0.48, 1.35, 0)
-    const handL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), skin)
-    handL.position.set(-0.48, 0.95, 0.05)
-    const handR = handL.clone()
-    handR.position.x = 0.48
+    const makeArm = (sign: number) => {
+      const arm = new THREE.Group()
+      const upper = capsule(0.085, 0.32, suit, 8)
+      upper.position.set(sign * 0.42, 1.7, 0)
+      upper.rotation.z = sign * 0.15
+      const fore = capsule(0.07, 0.28, suit, 8)
+      fore.position.set(sign * 0.5, 1.28, 0.08)
+      fore.rotation.z = sign * 0.25
+      fore.rotation.x = -0.35
+      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.03, 0.09), skin)
+      palm.position.set(sign * 0.54, 1.02, 0.18)
+      palm.rotation.x = -0.5
+      palm.rotation.z = sign * 0.1
+      for (let i = 0; i < 4; i++) {
+        const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.01, 0.05, 3, 5), skin)
+        f.position.set(sign * (0.5 + i * 0.015), 0.97, 0.24)
+        f.rotation.x = 0.9
+        arm.add(f)
+      }
+      const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.04, 3, 5), skin)
+      thumb.position.set(sign * 0.48, 1.04, 0.2)
+      thumb.rotation.z = sign * -0.8
+      arm.add(upper, fore, palm, thumb)
+      return arm
+    }
+    const armL = makeArm(-1)
+    const armR = makeArm(1)
 
     const legL = capsule(0.11, 0.7, suit, 8)
     legL.position.set(-0.16, 0.45, 0)
@@ -153,8 +172,6 @@ export function createEnemyModel(kind: EnemyKind): THREE.Group {
       shoulderR,
       armL,
       armR,
-      handL,
-      handR,
       legL,
       legR,
       shoeL,

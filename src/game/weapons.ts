@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { createViewHands } from './hands'
 
 export type WeaponId = 'rifle' | 'smg' | 'shotgun' | 'rail'
 
@@ -296,6 +297,7 @@ export function createWeaponModel(id: WeaponId): THREE.Group {
 
   root.rotation.y = -0.03
   root.rotation.x = 0.03
+  root.add(createViewHands(id))
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.castShadow = true

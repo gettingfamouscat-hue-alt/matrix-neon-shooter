@@ -1,39 +1,43 @@
 # MATRIX NEON — 3D Shooter
 
-A browser-based Matrix-style FPS built with Three.js + Vite.
+Matrix-style FPS built with Three.js + Vite. Play in the browser or as a desktop Electron app.
 
-## Play
+## Controls
 
 - **WASD** — move
-- **Mouse** — aim
-- **Click** — shoot
+- **LMB** — shoot
+- **RMB** — aim (ADS)
+- **1–4 / scroll** — switch guns
 - **R** — reload
 - **Shift** — dash
+- **M** — settings (sensitivity / FOV)
 - **Esc** — pause
 
-Survive waves of agents, runners, tanks, and drones. Every **5th wave** summons a boss.
-
-## Admin panel (owner only)
-
-1. Pause (`Esc`) → **ADMIN ACCESS**, or press **Ctrl+Shift+A**
-2. Enter the admin key from `VITE_ADMIN_PASSWORD`
-
-On Vercel, set the env var `VITE_ADMIN_PASSWORD` in Project Settings → Environment Variables, then redeploy.
-
-## Local
+## Web
 
 ```bash
 npm install
 npm run dev
 ```
 
-Create a `.env` file:
+Production: https://matrix-neon-shooter.vercel.app
 
-```
-VITE_ADMIN_PASSWORD=your-secret-admin-key
+## Electron (desktop)
+
+```bash
+npm install
+npm run electron:dev      # hot reload via Vite
+npm run electron:dist     # build Windows portable + installer into release/
 ```
 
-## Deploy
+After `electron:dist`, grab the `.exe` from the `release/` folder.
+
+## Admin (owner only)
+
+1. Pause → **ADMIN ACCESS**, or **Ctrl+Shift+A**
+2. Key from `VITE_ADMIN_PASSWORD` (set in `.env` / Vercel env)
+
+## Deploy web
 
 ```bash
 npm run build
