@@ -98,8 +98,55 @@ body,
   min-width: 220px;
 }
 
-.bar-wrap.ammo {
-  justify-content: flex-end;
+.weapon-hud {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+#weapon-slots {
+  display: flex;
+  gap: 0.35rem;
+}
+
+#weapon-slots button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  pointer-events: auto;
+  opacity: 0.55;
+}
+
+#weapon-slots button.active {
+  opacity: 1;
+  background: rgba(0, 255, 102, 0.28);
+  box-shadow: 0 0 12px var(--green-glow);
+}
+
+.crosshair.ads {
+  width: 22px;
+  height: 22px;
+}
+
+.crosshair.ads i:nth-child(1),
+.crosshair.ads i:nth-child(2) {
+  height: 6px;
+  left: 10px;
+}
+
+.crosshair.ads i:nth-child(3),
+.crosshair.ads i:nth-child(4) {
+  width: 6px;
+  top: 10px;
+}
+
+.crosshair.ads b {
+  top: 9.5px;
+  left: 9.5px;
 }
 
 .bar {
@@ -255,10 +302,48 @@ body,
   box-shadow: inset 0 0 140px rgba(255, 20, 60, 0.55);
 }
 
+.setting-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.setting-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--green);
+}
+
+.setting-row b {
+  color: var(--green);
+  font-family: var(--font-display);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.settings-panel {
+  width: min(480px, 92vw);
+  text-align: left;
+}
+
+.settings-panel h2,
+.settings-panel button {
+  text-align: center;
+  width: 100%;
+}
+
+.settings-hint {
+  margin: 0.5rem 0 1.25rem;
+}
+
 #menu,
 #pause,
 #gameover,
-#admin-modal {
+#admin-modal,
+#settings {
   position: fixed;
   inset: 0;
   z-index: 20;

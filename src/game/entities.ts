@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { createEnemyModel } from './models'
 
 export type EnemyKind = 'agent' | 'runner' | 'tank' | 'drone' | 'boss'
 
@@ -236,161 +237,6 @@ export function createArena(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
 }
 
-function addShadow(root: THREE.Object3D) {
-  root.traverse((o) => {
-    if (o instanceof THREE.Mesh) {
-      o.castShadow = true
-      o.receiveShadow = true
-    }
-  })
-}
-
-function limb(
-  w: number,
-  h: number,
-  d: number,
-  color: number,
-  emissive = 0x003311,
-): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    mat({ color, emissive, emissiveIntensity: 0.2, metalness: 0.4, roughness: 0.45 }),
-  )
-}
-
-function bodyFor(kind: EnemyKind): THREE.Group {
-  const g = new THREE.Group()
-
-  if (kind === 'agent') {
-    const suit = mat({ color: 0x101410, metalness: 0.65, roughness: 0.35, emissive: 0x00ff66, emissiveIntensity: 0.05 })
-    const skin = mat({ color: 0x2a3a2e, metalness: 0.2, roughness: 0.7 })
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 0.85, 6, 12), suit)
-    torso.position.y = 1.35
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skin)
-    head.position.y = 2.15
-    const glasses = new THREE.Mesh(
-      new THREE.BoxGeometry(0.52, 0.1, 0.08),
-      mat({ color: 0x050805, metalness: 0.9, roughness: 0.15, emissive: 0x00ff66, emissiveIntensity: 0.7 }),
-    )
-    glasses.position.set(0, 2.18, 0.24)
-    const tie = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.55, 0.04),
-      mat({ color: 0x111111, emissive: 0x00aa44, emissiveIntensity: 0.35 }),
-    )
-    tie.position.set(0, 1.35, 0.34)
-    const armL = limb(0.16, 0.7, 0.16, 0x101410)
-    armL.position.set(-0.52, 1.35, 0)
-    const armR = limb(0.16, 0.7, 0.16, 0x101410)
-    armR.position.set(0.52, 1.35, 0)
-    const legL = limb(0.2, 0.85, 0.22, 0x0c100c)
-    legL.position.set(-0.2, 0.45, 0)
-    const legR = limb(0.2, 0.85, 0.22, 0x0c100c)
-    legR.position.set(0.2, 0.45, 0)
-    g.add(torso, head, glasses, tie, armL, armR, legL, legR)
-  } else if (kind === 'runner') {
-    const neon = mat({
-      color: 0x0a2a1a,
-      emissive: 0x33ff99,
-      emissiveIntensity: 0.55,
-      metalness: 0.7,
-      roughness: 0.25,
-    })
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.7, 6, 12), neon)
-    torso.position.y = 1.15
-    torso.scale.set(0.85, 1.15, 0.85)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), neon)
-    head.position.y = 1.85
-    const trail = new THREE.Mesh(
-      new THREE.ConeGeometry(0.18, 0.7, 8),
-      new THREE.MeshStandardMaterial({
-        color: 0x33ff99,
-        emissive: 0x33ff99,
-        emissiveIntensity: 1.2,
-        transparent: true,
-        opacity: 0.65,
-      }),
-    )
-    trail.position.set(0, 0.9, 0.35)
-    trail.rotation.x = Math.PI / 2
-    g.add(torso, head, trail)
-  } else if (kind === 'tank') {
-    const armor = mat({
-      color: 0x2a1010,
-      emissive: 0xff2244,
-      emissiveIntensity: 0.35,
-      metalness: 0.85,
-      roughness: 0.3,
-    })
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 1.2), armor)
-    body.position.y = 1.2
-    const shoulder = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.45, 0.9), armor)
-    shoulder.position.y = 1.85
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.55), armor)
-    head.position.y = 2.25
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 0.12, 0.08),
-      mat({ color: 0xff6688, emissive: 0xff3355, emissiveIntensity: 1.2 }),
-    )
-    visor.position.set(0, 2.28, 0.3)
-    const legL = limb(0.35, 0.9, 0.4, 0x220808, 0xff2244)
-    legL.position.set(-0.4, 0.45, 0)
-    const legR = limb(0.35, 0.9, 0.4, 0x220808, 0xff2244)
-    legR.position.set(0.4, 0.45, 0)
-    g.add(body, shoulder, head, visor, legL, legR)
-  } else if (kind === 'drone') {
-    const shell = mat({
-      color: 0x102030,
-      emissive: 0x33ccff,
-      emissiveIntensity: 0.55,
-      metalness: 0.9,
-      roughness: 0.2,
-    })
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), shell)
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.75, 0.05, 10, 32),
-      mat({ color: 0x33ccff, emissive: 0x33ccff, emissiveIntensity: 1.1, metalness: 0.8, roughness: 0.2 }),
-    )
-    ring.rotation.x = Math.PI / 2
-    const lens = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 12, 12),
-      mat({ color: 0xffffff, emissive: 0x66eeff, emissiveIntensity: 1.5 }),
-    )
-    lens.position.z = 0.38
-    g.add(body, ring, lens)
-  } else {
-    const body = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(1.5, 0),
-      mat({
-        color: 0x2a0810,
-        emissive: 0xff0033,
-        emissiveIntensity: 0.55,
-        metalness: 0.85,
-        roughness: 0.25,
-      }),
-    )
-    body.position.y = 0.2
-    const aura = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(2.05, 1),
-      new THREE.MeshBasicMaterial({
-        color: 0xff3355,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.45,
-      }),
-    )
-    aura.position.y = 0.2
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 20, 20),
-      mat({ color: 0xffeecc, emissive: 0xffcc00, emissiveIntensity: 1.6, metalness: 0.3, roughness: 0.2 }),
-    )
-    core.position.y = 0.2
-    g.add(body, aura, core)
-  }
-
-  addShadow(g)
-  return g
-}
-
 export function spawnEnemy(kind: EnemyKind, wave: number, hardMode: boolean): Enemy {
   const scale = 1 + (wave - 1) * 0.08 + (hardMode ? 0.25 : 0)
   const base: Record<
@@ -404,7 +250,7 @@ export function spawnEnemy(kind: EnemyKind, wave: number, hardMode: boolean): En
     boss: { kind, hp: 1, maxHp: 1, speed: 3.2, damage: 18, score: 2000, radius: 2.2 },
   }
   const cfg = base[kind]
-  const mesh = bodyFor(kind)
+  const mesh = createEnemyModel(kind)
   mesh.position.set(0, kind === 'drone' ? 3.2 : kind === 'boss' ? 2.0 : 0, 0)
   return {
     ...cfg,
@@ -467,29 +313,3 @@ export function randomEdgeSpawn(out: THREE.Vector3) {
   return out
 }
 
-export function createWeapon(): THREE.Group {
-  const gun = new THREE.Group()
-  const metal = mat({ color: 0x1a221c, metalness: 0.9, roughness: 0.25, emissive: 0x00ff66, emissiveIntensity: 0.08 })
-  const accent = mat({ color: 0x00ff66, emissive: 0x00ff66, emissiveIntensity: 0.9, metalness: 0.5, roughness: 0.3 })
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.7), metal)
-  body.position.set(0, -0.05, -0.25)
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.55, 12), metal)
-  barrel.rotation.x = Math.PI / 2
-  barrel.position.set(0, -0.02, -0.75)
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.16), metal)
-  grip.position.set(0, -0.22, -0.05)
-  grip.rotation.x = 0.25
-  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.14), metal)
-  mag.position.set(0, -0.28, -0.2)
-  const sight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.12), accent)
-  sight.position.set(0, 0.1, -0.35)
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.4), accent)
-  rail.position.set(0, 0.07, -0.3)
-
-  gun.add(body, barrel, grip, mag, sight, rail)
-  gun.position.set(0.28, -0.28, -0.45)
-  gun.rotation.y = -0.04
-  gun.rotation.x = 0.04
-  return gun
-}

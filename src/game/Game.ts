@@ -9,11 +9,12 @@ import {
   createArena,
   createBoss,
   createPickup,
-  createWeapon,
   randomEdgeSpawn,
   spawnEnemy,
 } from './entities'
 import type { Enemy, EnemyKind, Pickup } from './entities'
+import { WEAPONS, createWeaponModel } from './weapons'
+import type { WeaponDef } from './weapons'
 
 export type AdminFlags = {
   god: boolean
@@ -31,7 +32,15 @@ type Projectile = {
   fromEnemy: boolean
 }
 
+type Settings = {
+  sensitivity: number
+  adsSensitivity: number
+  fov: number
+}
+
 const ADMIN_STORAGE = 'matrix-neon-admin'
+const SETTINGS_KEY = 'matrix-neon-settings'
+const BASE_SENS = 0.0022
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -42,9 +51,12 @@ export class Game {
   private rain: MatrixRain
   private effects: Effects
   private audio = new AudioBus()
+  private weaponModels: THREE.Group[] = []
   private weapon: THREE.Group
   private weaponKick = 0
   private bobPhase = 0
+  private weaponIndex = 0
+  private ammoPools: number[] = WEAPONS.map((w) => w.magSize)
 
   private keys = new Set<string>()
   private yaw = 0
@@ -53,8 +65,6 @@ export class Game {
   private playerPos = new THREE.Vector3(0, 1.7, 8)
   private health = 100
   private maxHealth = 100
-  private ammo = 30
-  private magSize = 30
   private reloading = false
   private reloadTimer = 0
   private fireCooldown = 0
@@ -71,10 +81,15 @@ export class Game {
   private shieldTimer = 0
   private running = false
   private paused = false
+  private settingsOpen = false
   private pointerLocked = false
   private mouseDown = false
+  private aiming = false
+  private adsBlend = 0
+  private settings: Settings = { sensitivity: 1, adsSensitivity: 0.65, fov: 70 }
   private tmp = new THREE.Vector3()
   private tmp2 = new THREE.Vector3()
+  private shootDir = new THREE.Vector3()
   private raycaster = new THREE.Raycaster()
   private spawnScratch = new THREE.Vector3()
 
@@ -91,12 +106,14 @@ export class Game {
     menu: document.getElementById('menu')!,
     pause: document.getElementById('pause')!,
     gameover: document.getElementById('gameover')!,
+    settings: document.getElementById('settings')!,
     wave: document.getElementById('wave')!,
     score: document.getElementById('score')!,
     kills: document.getElementById('kills')!,
     healthBar: document.getElementById('health-bar') as HTMLDivElement,
     healthText: document.getElementById('health-text')!,
     ammo: document.getElementById('ammo')!,
+    weaponName: document.getElementById('weapon-name')!,
     bossBar: document.getElementById('boss-bar')!,
     bossName: document.getElementById('boss-name')!,
     bossHealth: document.getElementById('boss-health') as HTMLDivElement,
@@ -111,9 +128,16 @@ export class Game {
     adminKey: document.getElementById('admin-key') as HTMLInputElement,
     adminError: document.getElementById('admin-error')!,
     adminStatus: document.getElementById('admin-status')!,
+    sensSlider: document.getElementById('sens-slider') as HTMLInputElement,
+    sensValue: document.getElementById('sens-value')!,
+    adsSensSlider: document.getElementById('ads-sens-slider') as HTMLInputElement,
+    adsSensValue: document.getElementById('ads-sens-value')!,
+    fovSlider: document.getElementById('fov-slider') as HTMLInputElement,
+    fovValue: document.getElementById('fov-value')!,
   }
 
   constructor(canvas: HTMLCanvasElement) {
+    this.loadSettings()
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -130,26 +154,62 @@ export class Game {
     createArena(this.scene, this.renderer)
     this.rain = new MatrixRain(this.scene, 900)
     this.effects = new Effects(this.scene)
-    this.weapon = createWeapon()
-    this.camera.add(this.weapon)
+
+    for (const def of WEAPONS) {
+      const model = createWeaponModel(def.id)
+      model.visible = false
+      this.camera.add(model)
+      this.weaponModels.push(model)
+    }
+    this.weapon = this.weaponModels[0]
+    this.weapon.visible = true
     this.scene.add(this.camera)
+    this.camera.fov = this.settings.fov
     this.camera.position.copy(this.playerPos)
 
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.55,
-      0.7,
-      0.35,
+    this.composer.addPass(
+      new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.7, 0.35),
     )
-    this.composer.addPass(bloom)
 
     this.bindUi()
     this.bindInput()
     window.addEventListener('resize', () => this.onResize())
     this.onResize()
     this.tick()
+  }
+
+  private get currentWeapon(): WeaponDef {
+    return WEAPONS[this.weaponIndex]
+  }
+
+  private loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Partial<Settings>
+      this.settings = {
+        sensitivity: parsed.sensitivity ?? 1,
+        adsSensitivity: parsed.adsSensitivity ?? 0.65,
+        fov: parsed.fov ?? 70,
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings))
+  }
+
+  private syncSettingsUi() {
+    this.el.sensSlider.value = String(this.settings.sensitivity)
+    this.el.sensValue.textContent = this.settings.sensitivity.toFixed(2)
+    this.el.adsSensSlider.value = String(this.settings.adsSensitivity)
+    this.el.adsSensValue.textContent = this.settings.adsSensitivity.toFixed(2)
+    this.el.fovSlider.value = String(this.settings.fov)
+    this.el.fovValue.textContent = String(this.settings.fov)
   }
 
   private bindUi() {
@@ -159,18 +219,60 @@ export class Game {
     document.getElementById('admin-open-btn')!.addEventListener('click', () => this.openAdmin())
     document.getElementById('admin-close-btn')!.addEventListener('click', () => this.closeAdmin())
     document.getElementById('admin-unlock-btn')!.addEventListener('click', () => this.tryAdminUnlock())
+    document.getElementById('settings-open-btn')!.addEventListener('click', () => this.openSettings())
+    document.getElementById('settings-close-btn')!.addEventListener('click', () => this.closeSettings())
     this.el.adminKey.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.tryAdminUnlock()
     })
     document.querySelectorAll<HTMLButtonElement>('[data-admin]').forEach((btn) => {
       btn.addEventListener('click', () => this.runAdmin(btn.dataset.admin!))
     })
+    document.querySelectorAll<HTMLButtonElement>('[data-gun]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.gun)
+        if (!Number.isNaN(idx)) this.switchWeapon(idx)
+      })
+    })
+
+    const bindRange = (
+      slider: HTMLInputElement,
+      label: HTMLElement,
+      key: keyof Settings,
+      digits: number,
+    ) => {
+      slider.addEventListener('input', () => {
+        const v = Number(slider.value)
+        this.settings[key] = v
+        label.textContent = digits ? v.toFixed(digits) : String(v)
+        if (key === 'fov') {
+          if (!this.aiming) {
+            this.camera.fov = v
+            this.camera.updateProjectionMatrix()
+          }
+        }
+        this.saveSettings()
+      })
+    }
+    bindRange(this.el.sensSlider, this.el.sensValue, 'sensitivity', 2)
+    bindRange(this.el.adsSensSlider, this.el.adsSensValue, 'adsSensitivity', 2)
+    bindRange(this.el.fovSlider, this.el.fovValue, 'fov', 0)
+    this.syncSettingsUi()
   }
 
   private bindInput() {
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code)
+      if (e.code === 'KeyM') {
+        e.preventDefault()
+        if (this.settingsOpen) this.closeSettings()
+        else this.openSettings()
+        return
+      }
       if (e.code === 'Escape') {
+        if (this.settingsOpen) {
+          this.closeSettings()
+          return
+        }
         if (!this.el.adminModal.classList.contains('hidden')) {
           this.closeAdmin()
           return
@@ -182,7 +284,10 @@ export class Game {
         }
       }
       if (e.code === 'KeyR' && this.running && !this.paused) this.reload()
-      // secret chord: Ctrl+Shift+A opens admin login when paused or on menu
+      if (e.code === 'Digit1') this.switchWeapon(0)
+      if (e.code === 'Digit2') this.switchWeapon(1)
+      if (e.code === 'Digit3') this.switchWeapon(2)
+      if (e.code === 'Digit4') this.switchWeapon(3)
       if (e.code === 'KeyA' && e.ctrlKey && e.shiftKey) {
         e.preventDefault()
         this.openAdmin()
@@ -190,8 +295,10 @@ export class Game {
     })
     window.addEventListener('keyup', (e) => this.keys.delete(e.code))
 
+    document.addEventListener('contextmenu', (e) => e.preventDefault())
+
     document.addEventListener('mousedown', (e) => {
-      if (!this.running || this.paused) return
+      if (!this.running || this.paused || this.settingsOpen) return
       if (!this.pointerLocked) {
         this.renderer.domElement.requestPointerLock()
         return
@@ -200,20 +307,32 @@ export class Game {
         this.mouseDown = true
         this.tryShoot()
       }
+      if (e.button === 2) this.aiming = true
     })
     document.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseDown = false
+      if (e.button === 2) this.aiming = false
     })
 
+    document.addEventListener('wheel', (e) => {
+      if (!this.running || this.paused || this.settingsOpen) return
+      e.preventDefault()
+      const dir = e.deltaY > 0 ? 1 : -1
+      this.switchWeapon((this.weaponIndex + dir + WEAPONS.length) % WEAPONS.length)
+    }, { passive: false })
+
     document.addEventListener('mousemove', (e) => {
-      if (!this.pointerLocked || this.paused || !this.running) return
-      this.yaw -= e.movementX * 0.0022
-      this.pitch -= e.movementY * 0.0022
+      if (!this.pointerLocked || this.paused || !this.running || this.settingsOpen) return
+      const adsMul = THREE.MathUtils.lerp(1, this.settings.adsSensitivity, this.adsBlend)
+      const sens = BASE_SENS * this.settings.sensitivity * adsMul
+      this.yaw -= e.movementX * sens
+      this.pitch -= e.movementY * sens
       this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch))
     })
 
     document.addEventListener('pointerlockchange', () => {
       this.pointerLocked = document.pointerLockElement === this.renderer.domElement
+      if (!this.pointerLocked) this.aiming = false
     })
   }
 
@@ -226,12 +345,35 @@ export class Game {
     this.composer.setSize(w, h)
   }
 
+  openSettings() {
+    this.settingsOpen = true
+    this.paused = true
+    this.aiming = false
+    document.exitPointerLock()
+    this.el.pause.classList.add('hidden')
+    this.el.settings.classList.remove('hidden')
+    this.syncSettingsUi()
+  }
+
+  closeSettings() {
+    this.settingsOpen = false
+    this.el.settings.classList.add('hidden')
+    if (this.running) {
+      this.paused = false
+      this.renderer.domElement.requestPointerLock()
+    } else if (!this.el.pause.classList.contains('hidden')) {
+      /* stay on pause if opened from there somehow */
+    }
+  }
+
   start() {
     this.audio.ensure()
     this.clearWorld()
     this.health = 100
     this.maxHealth = 100
-    this.ammo = this.magSize
+    this.ammoPools = WEAPONS.map((w) => w.magSize)
+    this.weaponIndex = 0
+    this.applyWeaponModel()
     this.reloading = false
     this.score = 0
     this.kills = 0
@@ -240,16 +382,20 @@ export class Game {
     this.waveClearTimer = 0
     this.rapidTimer = 0
     this.shieldTimer = 0
+    this.aiming = false
+    this.adsBlend = 0
     this.playerPos.set(0, 1.7, 8)
     this.velocity.set(0, 0, 0)
     this.yaw = 0
     this.pitch = 0
     this.running = true
     this.paused = false
+    this.settingsOpen = false
     this.el.menu.classList.add('hidden')
     this.el.pause.classList.add('hidden')
     this.el.gameover.classList.add('hidden')
     this.el.adminModal.classList.add('hidden')
+    this.el.settings.classList.add('hidden')
     this.el.hud.classList.remove('hidden')
     this.el.bossBar.classList.add('hidden')
     this.showBanner(`WAVE ${this.wave}`)
@@ -259,19 +405,23 @@ export class Game {
 
   pause() {
     this.paused = true
+    this.aiming = false
     document.exitPointerLock()
     this.el.pause.classList.remove('hidden')
   }
 
   resume() {
     this.paused = false
+    this.settingsOpen = false
     this.el.pause.classList.add('hidden')
     this.el.adminModal.classList.add('hidden')
+    this.el.settings.classList.add('hidden')
     this.renderer.domElement.requestPointerLock()
   }
 
   private gameOver() {
     this.running = false
+    this.aiming = false
     document.exitPointerLock()
     this.el.gameover.classList.remove('hidden')
     this.el.finalStats.textContent = `Wave ${this.wave} · Score ${this.score} · Kills ${this.kills}`
@@ -293,63 +443,111 @@ export class Game {
     window.setTimeout(() => this.el.waveBanner.classList.add('hidden'), 1600)
   }
 
+  private switchWeapon(index: number) {
+    if (!this.running || this.paused || this.settingsOpen) return
+    if (index < 0 || index >= WEAPONS.length || index === this.weaponIndex) return
+    if (this.reloading) {
+      this.reloading = false
+      this.reloadTimer = 0
+    }
+    this.weaponIndex = index
+    this.applyWeaponModel()
+    this.fireCooldown = 0.15
+    this.updateHud()
+  }
+
+  private applyWeaponModel() {
+    for (let i = 0; i < this.weaponModels.length; i++) {
+      this.weaponModels[i].visible = i === this.weaponIndex
+    }
+    this.weapon = this.weaponModels[this.weaponIndex]
+    document.querySelectorAll<HTMLButtonElement>('[data-gun]').forEach((btn) => {
+      btn.classList.toggle('active', Number(btn.dataset.gun) === this.weaponIndex)
+    })
+  }
+
   private updateHud() {
+    const w = this.currentWeapon
     this.el.wave.textContent = String(this.wave)
     this.el.score.textContent = String(this.score)
     this.el.kills.textContent = String(this.kills)
+    this.el.weaponName.textContent = w.name
     const hpPct = Math.max(0, (this.health / this.maxHealth) * 100)
     this.el.healthBar.style.width = `${hpPct}%`
     this.el.healthText.textContent = String(Math.ceil(this.health))
+    const ammo = this.ammoPools[this.weaponIndex]
     this.el.ammo.textContent = this.admin.infiniteAmmo
       ? '∞ / ∞'
       : this.reloading
         ? 'RELOADING'
-        : `${this.ammo} / ∞`
+        : `${ammo} / ${w.magSize}`
   }
 
   private reload() {
-    if (this.reloading || this.admin.infiniteAmmo || this.ammo >= this.magSize) return
+    const w = this.currentWeapon
+    const ammo = this.ammoPools[this.weaponIndex]
+    if (this.reloading || this.admin.infiniteAmmo || ammo >= w.magSize) return
     this.reloading = true
-    this.reloadTimer = 1.1
+    this.reloadTimer = w.reloadTime
     this.audio.reload()
+    this.updateHud()
   }
 
   private tryShoot() {
+    const w = this.currentWeapon
     if (this.reloading || this.fireCooldown > 0) return
-    if (!this.admin.infiniteAmmo && this.ammo <= 0) {
+    if (!w.auto && !this.mouseDown) return
+    // semi-auto: only fire once per click — handled by fireCooldown + mouseDown edge
+    if (!this.admin.infiniteAmmo && this.ammoPools[this.weaponIndex] <= 0) {
       this.reload()
       return
     }
-    if (!this.admin.infiniteAmmo) this.ammo--
-    this.fireCooldown = this.rapidTimer > 0 ? 0.07 : 0.14
+    if (!this.admin.infiniteAmmo) this.ammoPools[this.weaponIndex]--
+    const rate = this.rapidTimer > 0 ? w.fireRate * 0.65 : w.fireRate
+    this.fireCooldown = rate
     this.audio.shoot()
-    this.weaponKick = 1
+    this.weaponKick = w.kick
     this.el.crosshair.classList.add('firing')
     window.setTimeout(() => this.el.crosshair.classList.remove('firing'), 80)
 
     const origin = this.camera.getWorldPosition(this.tmp.set(0, 0, 0))
-    const dir = this.camera.getWorldDirection(this.tmp2)
-    this.effects.muzzleFlash(origin.clone().addScaledVector(dir, 1.35))
+    const baseDir = this.camera.getWorldDirection(this.tmp2)
+    this.effects.muzzleFlash(origin.clone().addScaledVector(baseDir, 1.35))
 
-    this.raycaster.set(origin, dir)
+    const spreadScale = THREE.MathUtils.lerp(1, 0.25, this.adsBlend)
     const targets = this.enemies.filter((e) => e.alive).map((e) => e.mesh)
-    const hits = this.raycaster.intersectObjects(targets, true)
-    if (hits.length) {
-      let obj: THREE.Object3D | null = hits[0].object
-      let enemy: Enemy | undefined
-      while (obj) {
-        enemy = this.enemies.find((e) => e.mesh === obj)
-        if (enemy) break
-        obj = obj.parent
+
+    for (let p = 0; p < w.pellets; p++) {
+      this.shootDir.copy(baseDir)
+      if (w.spread > 0) {
+        this.shootDir.x += (Math.random() - 0.5) * w.spread * spreadScale
+        this.shootDir.y += (Math.random() - 0.5) * w.spread * spreadScale
+        this.shootDir.z += (Math.random() - 0.5) * w.spread * spreadScale
+        this.shootDir.normalize()
       }
-      if (enemy && enemy.alive) {
-        const dmg = this.admin.oneShot ? 99999 : this.rapidTimer > 0 ? 18 : 24
-        this.damageEnemy(enemy, dmg, hits[0].point)
+      this.raycaster.set(origin, this.shootDir)
+      const hits = this.raycaster.intersectObjects(targets, true)
+      if (hits.length) {
+        let obj: THREE.Object3D | null = hits[0].object
+        let enemy: Enemy | undefined
+        while (obj) {
+          enemy = this.enemies.find((e) => e.mesh === obj)
+          if (enemy) break
+          obj = obj.parent
+        }
+        if (enemy && enemy.alive) {
+          const dmg = this.admin.oneShot
+            ? 99999
+            : w.damage * (this.rapidTimer > 0 ? 1.15 : 1) * (1 + this.adsBlend * 0.15)
+          this.damageEnemy(enemy, dmg, hits[0].point)
+        }
+      } else if (p === 0) {
+        this.effects.burst(origin.clone().addScaledVector(this.shootDir, 40), 0x66ff99, 4, 2)
       }
-    } else {
-      // tracer miss spark in distance
-      this.effects.burst(origin.clone().addScaledVector(dir, 40), 0x66ff99, 4, 2)
     }
+
+    // semi-auto: consume the click so holding doesn't spray
+    if (!w.auto) this.mouseDown = false
     this.updateHud()
   }
 
@@ -420,7 +618,6 @@ export class Game {
       this.audio.boss()
       this.showBanner(`BOSS — ${boss.name}`)
       this.updateBossBar()
-      // adds
       const adds = 2 + Math.floor(this.wave / 5)
       for (let i = 0; i < adds; i++) this.spawnWaveEnemy('agent')
       return
@@ -451,7 +648,6 @@ export class Game {
     this.enemies.push(e)
   }
 
-  // —— Admin ——
   openAdmin() {
     this.el.adminModal.classList.remove('hidden')
     this.el.adminError.classList.add('hidden')
@@ -464,8 +660,11 @@ export class Game {
     }
     if (this.running) {
       this.paused = true
+      this.aiming = false
       document.exitPointerLock()
       this.el.pause.classList.add('hidden')
+      this.el.settings.classList.add('hidden')
+      this.settingsOpen = false
     }
   }
 
@@ -558,6 +757,17 @@ export class Game {
 
     this.rain.update(rawDt)
 
+    // ADS blend + FOV
+    const adsTarget = this.aiming && this.running && !this.paused ? 1 : 0
+    this.adsBlend = THREE.MathUtils.lerp(this.adsBlend, adsTarget, 1 - Math.pow(0.0008, rawDt))
+    const wpn = this.currentWeapon
+    const targetFov = THREE.MathUtils.lerp(this.settings.fov, wpn.adsFov, this.adsBlend)
+    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
+      this.camera.fov = targetFov
+      this.camera.updateProjectionMatrix()
+    }
+    this.el.crosshair.classList.toggle('ads', this.adsBlend > 0.5)
+
     if (this.running && !this.paused) {
       this.updatePlayer(dt)
       this.updateEnemies(dt)
@@ -576,7 +786,6 @@ export class Game {
       }
     }
 
-    // camera from player
     this.camera.position.copy(this.playerPos)
     this.camera.rotation.order = 'YXZ'
     this.camera.rotation.y = this.yaw
@@ -590,15 +799,23 @@ export class Game {
         this.keys.has('KeyA') ||
         this.keys.has('KeyS') ||
         this.keys.has('KeyD'))
-    if (moving) this.bobPhase += rawDt * 10
-    const bobY = moving ? Math.sin(this.bobPhase) * 0.015 : 0
-    const bobX = moving ? Math.cos(this.bobPhase * 0.5) * 0.01 : 0
-    this.weapon.position.set(
-      0.28 + bobX,
-      -0.28 + bobY - this.weaponKick * 0.04,
-      -0.45 - this.weaponKick * 0.08,
-    )
-    this.weapon.rotation.x = 0.04 + this.weaponKick * 0.12
+    if (moving) this.bobPhase += rawDt * (this.aiming ? 6 : 10)
+    const bobAmp = THREE.MathUtils.lerp(1, 0.25, this.adsBlend)
+    const bobY = moving ? Math.sin(this.bobPhase) * 0.015 * bobAmp : 0
+    const bobX = moving ? Math.cos(this.bobPhase * 0.5) * 0.01 * bobAmp : 0
+
+    // hip vs ADS weapon pose
+    const hip = { x: 0.26, y: -0.26, z: -0.42 }
+    const ads = { x: 0.0, y: -0.16, z: -0.28 }
+    const px = THREE.MathUtils.lerp(hip.x, ads.x, this.adsBlend) + bobX
+    const py =
+      THREE.MathUtils.lerp(hip.y, ads.y, this.adsBlend) + bobY - this.weaponKick * 0.04
+    const pz =
+      THREE.MathUtils.lerp(hip.z, ads.z, this.adsBlend) - this.weaponKick * 0.08
+    // keep each model's local offset, then blend root
+    this.weapon.position.set(px, py, pz)
+    this.weapon.rotation.x = THREE.MathUtils.lerp(0.03, 0, this.adsBlend) + this.weaponKick * 0.1
+    this.weapon.rotation.y = THREE.MathUtils.lerp(-0.03, 0, this.adsBlend)
 
     this.effects.update(rawDt, this.camera)
     this.composer.render()
@@ -614,7 +831,7 @@ export class Game {
       this.reloadTimer -= dt
       if (this.reloadTimer <= 0) {
         this.reloading = false
-        this.ammo = this.magSize
+        this.ammoPools[this.weaponIndex] = this.currentWeapon.magSize
         this.updateHud()
       }
     }
@@ -628,8 +845,8 @@ export class Game {
     if (this.keys.has('KeyA')) wish.sub(right)
     if (wish.lengthSq() > 0) wish.normalize()
 
-    let speed = 9
-    if (this.keys.has('ShiftLeft') && this.dashCooldown <= 0 && wish.lengthSq() > 0) {
+    let speed = this.aiming ? 5.5 : 9
+    if (this.keys.has('ShiftLeft') && this.dashCooldown <= 0 && wish.lengthSq() > 0 && !this.aiming) {
       speed = 22
       this.dashCooldown = 1.1
       this.effects.ring(this.playerPos.clone().setY(0.15))
@@ -643,7 +860,7 @@ export class Game {
     this.playerPos.z = THREE.MathUtils.clamp(this.playerPos.z, -46, 46)
     this.playerPos.y = 1.7
 
-    if (this.mouseDown) this.tryShoot()
+    if (this.mouseDown && this.currentWeapon.auto) this.tryShoot()
   }
 
   private updateEnemies(dt: number) {
@@ -672,14 +889,15 @@ export class Game {
         const orbit = Math.sin(e.phase * 1.2) * 0.5
         pos.addScaledVector(toPlayer, (e.speed + orbit) * dt)
         e.mesh.rotation.y += dt
-        e.mesh.children[1].rotation.x += dt * 2
-        e.mesh.children[1].rotation.y += dt * 1.4
+        const aura = e.mesh.getObjectByName('bossAura')
+        if (aura) {
+          aura.rotation.x += dt * 2
+          aura.rotation.y += dt * 1.4
+        }
         if (e.shootCooldown <= 0) {
           e.shootCooldown = Math.max(0.55, 1.2 - this.wave * 0.02)
           for (let i = -2; i <= 2; i++) {
-            const dir = toPlayer
-              .clone()
-              .applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.18)
+            const dir = toPlayer.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.18)
             this.spawnEnemyShot(pos, dir, 14, e.damage * 0.55)
           }
           if (e.hp < e.maxHp * 0.4) {

@@ -38,9 +38,15 @@
             <div class="bar"><div id="health-bar"></div></div>
             <span id="health-text">100</span>
           </div>
-          <div class="bar-wrap ammo">
-            <span class="label">AMMO</span>
+          <div class="weapon-hud">
+            <span class="label" id="weapon-name">PULSE RIFLE</span>
             <span id="ammo">30 / ∞</span>
+            <div id="weapon-slots">
+              <button type="button" data-gun="0" class="active">1</button>
+              <button type="button" data-gun="1">2</button>
+              <button type="button" data-gun="2">3</button>
+              <button type="button" data-gun="3">4</button>
+            </div>
           </div>
         </div>
         <div id="boss-bar" class="hidden">
@@ -60,8 +66,33 @@
           <p class="tagline">Jack in. Clear the agents. Survive the architects.</p>
           <button id="start-btn" type="button">ENTER THE MATRIX</button>
           <p class="controls">
-            WASD move · Mouse aim · Click shoot · R reload · Shift dash · Esc pause
+            WASD move · LMB shoot · RMB aim · 1-4 guns · R reload · Shift dash · M settings · Esc pause
           </p>
+        </div>
+      </div>
+
+      <div id="settings" class="hidden">
+        <div class="menu-panel settings-panel">
+          <h2>SETTINGS</h2>
+          <label class="setting-row">
+            <span>Mouse Sensitivity</span>
+            <input id="sens-slider" type="range" min="0.2" max="3" step="0.05" value="1" />
+            <b id="sens-value">1.00</b>
+          </label>
+          <label class="setting-row">
+            <span>ADS Sensitivity</span>
+            <input id="ads-sens-slider" type="range" min="0.2" max="1.5" step="0.05" value="0.65" />
+            <b id="ads-sens-value">0.65</b>
+          </label>
+          <label class="setting-row">
+            <span>Field of View</span>
+            <input id="fov-slider" type="range" min="60" max="100" step="1" value="70" />
+            <b id="fov-value">70</b>
+          </label>
+          <p class="controls settings-hint">
+            RMB hold to aim · Scroll or 1–4 to switch weapons · M closes settings
+          </p>
+          <button id="settings-close-btn" type="button">DONE</button>
         </div>
       </div>
 
@@ -69,6 +100,7 @@
         <div class="menu-panel compact">
           <h2>PAUSED</h2>
           <button id="resume-btn" type="button">RESUME</button>
+          <button id="settings-open-btn" type="button" class="ghost">SETTINGS</button>
           <button id="admin-open-btn" type="button" class="ghost">ADMIN ACCESS</button>
         </div>
       </div>
