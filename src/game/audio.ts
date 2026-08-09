@@ -161,4 +161,10 @@ export class AudioBus {
     this.ensure()
     this.osc('sine', 180, 0.03, 0.01, 0.08, 320)
   }
+
+  jump() {
+    this.ensure()
+    this.osc('triangle', 180, 0.04, 0.002, 0.08, 90)
+    this.noiseBurst(0.06, 0.001, 0.05, 600, 0.8)
+  }
 }

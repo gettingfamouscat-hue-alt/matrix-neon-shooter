@@ -69,6 +69,10 @@ export class Game {
   private reloadTimer = 0
   private fireCooldown = 0
   private dashCooldown = 0
+  private grounded = true
+  private readonly eyeHeight = 1.7
+  private readonly jumpForce = 8.5
+  private readonly gravity = 22
   private score = 0
   private kills = 0
   private wave = 1
@@ -261,6 +265,7 @@ export class Game {
 
   private bindInput() {
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') e.preventDefault()
       this.keys.add(e.code)
       if (e.code === 'KeyM') {
         e.preventDefault()
@@ -384,8 +389,9 @@ export class Game {
     this.shieldTimer = 0
     this.aiming = false
     this.adsBlend = 0
-    this.playerPos.set(0, 1.7, 8)
+    this.playerPos.set(0, this.eyeHeight, 8)
     this.velocity.set(0, 0, 0)
+    this.grounded = true
     this.yaw = 0
     this.pitch = 0
     this.running = true
@@ -847,19 +853,50 @@ export class Game {
     if (wish.lengthSq() > 0) wish.normalize()
 
     let speed = this.aiming ? 5.5 : 9
-    if (this.keys.has('ShiftLeft') && this.dashCooldown <= 0 && wish.lengthSq() > 0 && !this.aiming) {
+    if (
+      this.keys.has('ShiftLeft') &&
+      this.dashCooldown <= 0 &&
+      wish.lengthSq() > 0 &&
+      !this.aiming &&
+      this.grounded
+    ) {
       speed = 22
       this.dashCooldown = 1.1
       this.effects.ring(this.playerPos.clone().setY(0.15))
     }
 
-    this.velocity.x = THREE.MathUtils.lerp(this.velocity.x, wish.x * speed, 1 - Math.pow(0.001, dt))
-    this.velocity.z = THREE.MathUtils.lerp(this.velocity.z, wish.z * speed, 1 - Math.pow(0.001, dt))
+    if (this.keys.has('Space') && this.grounded) {
+      this.velocity.y = this.jumpForce
+      this.grounded = false
+      this.audio.jump()
+    }
+
+    const airControl = this.grounded ? 1 : 0.45
+    this.velocity.x = THREE.MathUtils.lerp(
+      this.velocity.x,
+      wish.x * speed,
+      (1 - Math.pow(0.001, dt)) * airControl,
+    )
+    this.velocity.z = THREE.MathUtils.lerp(
+      this.velocity.z,
+      wish.z * speed,
+      (1 - Math.pow(0.001, dt)) * airControl,
+    )
+    this.velocity.y -= this.gravity * dt
+
     this.playerPos.x += this.velocity.x * dt
+    this.playerPos.y += this.velocity.y * dt
     this.playerPos.z += this.velocity.z * dt
     this.playerPos.x = THREE.MathUtils.clamp(this.playerPos.x, -46, 46)
     this.playerPos.z = THREE.MathUtils.clamp(this.playerPos.z, -46, 46)
-    this.playerPos.y = 1.7
+
+    if (this.playerPos.y <= this.eyeHeight) {
+      this.playerPos.y = this.eyeHeight
+      this.velocity.y = 0
+      this.grounded = true
+    } else {
+      this.grounded = false
+    }
 
     if (this.mouseDown && this.currentWeapon.auto) this.tryShoot()
   }

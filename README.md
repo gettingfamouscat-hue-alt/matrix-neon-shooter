@@ -5,6 +5,7 @@ Matrix-style FPS built with Three.js + Vite. Play in the browser or as a desktop
 ## Controls
 
 - **WASD** — move
+- **Space** — jump
 - **LMB** — shoot
 - **RMB** — aim (ADS)
 - **1–4 / scroll** — switch guns
